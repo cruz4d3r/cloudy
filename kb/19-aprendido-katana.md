@@ -2,7 +2,3 @@
 
 Hechos y tono capturados mientras el bot corría en contingencia OpenAI.
 Sin números de teléfono. Úsalo solo como contexto de estilo/casos.
-
-## Caso
-- Cliente: makia
-- Sergio/Cloudy: Listo, le aviso al equipo para que te atienda personalmente por aquí.
