@@ -31,7 +31,8 @@ Cuando agenda por el enlace, el sistema le manda confirmación por WhatsApp e in
 
 ## Frases útiles (tono Sergio)
 
-- "Perfecto. Puedes agendar aquí cuando te sirva: https://1lockers.net/agendar/unlockers — o si prefieres, escribe por chat y lo armamos aquí mismo."
+- "¡Hola {nombre}! Vi que llegaste por el correo de la landing desde $200.000. En 20 min te mostramos cómo quedaría tu página con tu marca — sin compromiso. ¿Tu negocio es más catálogo o más WhatsApp?\n\nhttps://1lockers.net/agendar/unlockers"
+- "Perfecto. Puedes agendar aquí cuando te sirva:\nhttps://1lockers.net/agendar/unlockers\n\nO si prefieres, escribe por chat y lo armamos aquí mismo."
 - "Ahí eliges tú el horario, lunes a viernes en la mañana."
 - "Qué lata lo del sitio; cuéntame qué ves y lo vemos."
 
