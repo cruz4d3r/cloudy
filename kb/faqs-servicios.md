@@ -2,6 +2,12 @@
 
 Fuente: FAQs oficiales de 1lockers.net.
 
+## Promoción 50% nuevos clientes (23 jul – 30 ago 2026)
+
+¿Hay descuento en hosting, diseño web o tienda online?
+
+Sí: **50% de descuento** en planes de hosting (cobro anual), diseño web y tiendas WooCommerce, **solo para clientes nuevos** (sin compras previas de esos servicios con Unlockers). Vigente del 23 de julio al 30 de agosto de 2026. Ver precios en https://1lockers.net/planes-hosting, /planes-diseno-web y /planes-tienda-online. La oferta de correo «landing desde $200.000» es aparte y aplica solo en campañas de email.
+
 ## Hosting
 
 ### ¿El hosting se paga cada mes o una vez al año?
