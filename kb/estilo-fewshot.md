@@ -1,21 +1,11 @@
 # Ejemplos de estilo (generado por `bot ingest --conversaciones`)
 
-Ejemplos de cómo responde el asesor — leads comerciales primero, luego soporte.
+Ejemplos reales de cómo responde el asesor a sus clientes.
 
-Cliente: Hola, soy Juan Polanco de JUAN POLANCO (NIT 1096190781). Vi el correo sobre armar una landing desde $200.000 y quiero agendar una llamada.
-Asesor: ¡Hola Juan! Te saluda Unlockers Cloud.
+Cliente: Hola Lindo dia   sergio me confirmas si quedo esto !!! Me confirmas esto Me confirmas esto por fa Pudiste mirar esto [Media reaction] [Media reaction] [Media image] [Media reaction] Esto aun no esta !!! [Media reaction] [Media reaction] [Media reaction] Por favor me ayudas con esto , Son dos cosas la primera es que se pueda hacer como David Yurman para la que el cliente lo vea mas fácil   Y la segunda que el menú es muy lento para abrir [Media reaction] [Media reaction] esto no esta !!! [Media image] [Media image] [Media reaction] [Media audio] [Media audio] [Media audio] [Media audio] [Media audio] [Media audio] [Media audio] [Media image] [Media image]
+Asesor: No pude descargar el archivo. ¿Podrías reenviarlo o describirme en texto de qué se trata? Así puedo ayudarte mejor. No pude ver la imagen. ¿Podrías describirme de qué se trata o intentar reenviarla? Así podré ayudarte mejor.
 
-Vimos que te interesó lo del correo. ¿Cómo estás?
-
-Cuéntanos un poquito de tu proyecto antes de agendar — ¿qué tienes en mente?
-
-Cliente: Tengo una ferretería y quiero que me escriban por WhatsApp.
-Asesor: Qué bien, Juan. Una landing con botón a WhatsApp encaja perfecto para eso.
-
-¿Te sirve una llamada corta esta semana? Agenda aquí:
-https://1lockers.net/agendar/unlockers
-
-Cliente: [Media image] Cuéntame con texto qué necesitas y lo revisamos.
+Cliente: [Media image] [Media image] Cuéntame con texto qué necesitas y lo revisamos.
 Asesor: Para registrar la solicitud, por favor indícame qué cambio o acción necesitas que realicemos. La dejaremos en cola de revisión del equipo. Recuerda que tienes un saldo pendiente de 2 000 000 COP; puedes pagar por Bancolombia, Nequi o Daviplata.
 
 Cliente: [Media image] Cuéntame con texto qué necesitas y lo revisamos.
@@ -29,6 +19,3 @@ Asesor: Entiendo, ¿puedes especificar cuál era la solicitud anterior que quier
 
 Cliente: las que tenia de antes nada no se si se deba crear una nueva no se si se deba crear una nueva [Media image]
 Asesor: Recibí tu solicitud (#2).  La revisará nuestro equipo antes de aplicar cualquier cambio. Te avisamos por aquí cuando esté lista o si necesitamos algo más.
-
-Cliente: Ok Me ayudas está fallando .. [Media image] No entiendo ? [Media audio] [Media audio] [Media image] [Media image] Márcame
-Asesor: Hola DY, veo que tienes un tema con las etiquetas en tu página. Para orientarte mejor, ¿qué tipo de servicio necesitas (sitio web, tienda online, hosting, integración con WhatsApp/CRM u otro)? Podemos agendar una llamada aquí https://1lockers.net/agendar/unlockers o seguir por este chat, tú decides.
