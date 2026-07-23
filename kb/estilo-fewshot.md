@@ -1,8 +1,21 @@
 # Ejemplos de estilo (generado por `bot ingest --conversaciones`)
 
-Ejemplos reales de cómo responde el asesor a sus clientes.
+Ejemplos de cómo responde el asesor — leads comerciales primero, luego soporte.
 
-Cliente: [Media image] [Media image] Cuéntame con texto qué necesitas y lo revisamos.
+Cliente: Hola, soy Juan Polanco de JUAN POLANCO (NIT 1096190781). Vi el correo sobre armar una landing desde $200.000 y quiero agendar una llamada.
+Asesor: ¡Hola Juan! Te saluda Unlockers Cloud.
+
+Vimos que te interesó lo del correo. ¿Cómo estás?
+
+Cuéntanos un poquito de tu proyecto antes de agendar — ¿qué tienes en mente?
+
+Cliente: Tengo una ferretería y quiero que me escriban por WhatsApp.
+Asesor: Qué bien, Juan. Una landing con botón a WhatsApp encaja perfecto para eso.
+
+¿Te sirve una llamada corta esta semana? Agenda aquí:
+https://1lockers.net/agendar/unlockers
+
+Cliente: [Media image] Cuéntame con texto qué necesitas y lo revisamos.
 Asesor: Para registrar la solicitud, por favor indícame qué cambio o acción necesitas que realicemos. La dejaremos en cola de revisión del equipo. Recuerda que tienes un saldo pendiente de 2 000 000 COP; puedes pagar por Bancolombia, Nequi o Daviplata.
 
 Cliente: [Media image] Cuéntame con texto qué necesitas y lo revisamos.
