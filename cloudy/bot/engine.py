@@ -1504,7 +1504,7 @@ def _answer_query(
         "responde sin ponerle ese nombre. Si el contacto es empresa o línea compartida, no uses nombre propio."
         "\nResponde en máximo 4 frases, útil y concreto. Si no sabes algo, dilo."
         f"{' NO ofrezcas otra llamada ni cita: ya hay reunión coordinada.' if meeting_state else ' Si aplica y no hay cita, ofrece agendar una reunión.'}"
-        " Puedes citar precios que estén en el contexto KB; no inventes otros."
+        " Puedes citar precios que estén en el contexto KB (convertidos a la moneda del contacto si no es Colombia); no inventes otros."
         f"\n\nContexto de la empresa (solo tenant {company_alias}):\n{context}"
     )
 

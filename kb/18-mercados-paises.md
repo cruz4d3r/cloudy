@@ -44,6 +44,12 @@ Atendemos clientes en **todo Latinoamérica hispano** de forma remota.
 - Adaptar ejemplos al país si lo conoces.
 - **No** decir «envíos a todo Colombia» ni pasarelas solo colombianas salvo que el negocio del cliente opere en Colombia.
 
+### Perú (PE) y resto LATAM
+
+- Moneda de referencia al cotizar: **PEN** (Perú), **CRC** (Costa Rica), **USD** (Ecuador, Panamá, etc.).
+- La KB interna está en **COP**; Cloudy debe **convertir** antes de responder (ver `config/bot_fx.json`).
+- **Prohibido** dar precios solo en pesos colombianos a contactos fuera de Colombia.
+
 ### País desconocido o prefijo ambiguo (+1)
 
 - Tono **neutro internacional**; pagos con tarjeta internacional / PayPal.
@@ -58,6 +64,13 @@ Atendemos clientes en **todo Latinoamérica hispano** de forma remota.
 | Servientrega / Coordinadora | Sí |
 | PSE / Nequi / Davivienda | Sí |
 | Promo $288.750 COP | Puede citarse con contexto en cualquier país |
+
+| Promo referencia | Colombia | México (aprox.) | Perú (aprox.) | EE.UU. (aprox.) |
+|------------------|----------|-----------------|---------------|-----------------|
+| Sitio informativo 50% | $288.750 COP | ≈ $1.300 MXN | ≈ S/ 300 | ≈ USD $70 |
+| Hosting anual promo | $120.000 COP | ≈ $550 MXN | ≈ S/ 125 | ≈ USD $30 |
+
+*Tasas en `config/bot_fx.json`; el bot inyecta cifras actualizadas en el prompt.*
 
 ## Pagos internacionales (cualquier país)
 
