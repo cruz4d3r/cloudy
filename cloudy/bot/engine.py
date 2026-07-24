@@ -1781,49 +1781,53 @@ def handle_inbound(
     client = _enrich_client(contact, client, company_alias=company_alias)
     country_resolved = _sync_contact_country(company_alias, contact, session, text)
 
-    prior_user_msgs = store.count_user_messages(company_alias, contact)
-    is_first_contact = prior_user_msgs == 0
     attribution = _detect_inbound_attribution(text)
 
-    # Primer contacto o prospecto → CRM Katana (lead comercial + seguimiento).
-    if is_first_contact or client.get("prospect"):
-        try:
-            from cloudy.bot.katana_chat import upsert_contact
+    # CRM Katana: solo primer sync o reintento tras fallo (no cada mensaje de prospecto).
+    crm_state = store.get_crm_sync(company_alias, contact)
+    crm_needs_sync = (
+        not crm_state.get("commercial_lead_id")
+        or int(crm_state.get("crm_pending") or 0) == 1
+    )
+    if crm_needs_sync:
+        proceed, is_first_contact = store.begin_crm_upsert(company_alias, contact)
+        if proceed:
+            try:
+                from cloudy.bot.katana_chat import upsert_contact
 
-            hist_snip = _history_snippet(
-                company_alias, contact, session,
-                str(company.get("owner_name") or "Asesor"), limit=12,
-            )
-            stage = "calificar"
-            if _is_commercial_lead(text, client):
-                stage = "calificar"
-            country_note = ""
-            if country_resolved.is_known:
-                country_note = f"[país detectado: {country_resolved.label_es} ({country_resolved.code})] "
-            crm_result = upsert_contact({
-                "name": client["name"],
-                "phone": contact,
-                "channel": "whatsapp",
-                "summary": (country_note + hist_snip + "\n" + text)[:1500],
-                "stage": stage,
-                "is_first_contact": is_first_contact,
-                "last_inbound_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
-                "detected_country": country_resolved.code if country_resolved.is_known else "",
-                "interested_services": attribution.get("interested_services"),
-                "utm_source": attribution.get("utm_source", ""),
-                "utm_medium": attribution.get("utm_medium", ""),
-                "utm_campaign": attribution.get("utm_campaign", ""),
-                "utm_content": attribution.get("utm_content", ""),
-            })
-            if crm_result and crm_result.get("success"):
-                lead_id = crm_result.get("commercial_lead_id")
-                if lead_id:
-                    store.mark_crm_synced(company_alias, contact, int(lead_id))
-            else:
+                hist_snip = _history_snippet(
+                    company_alias, contact, session,
+                    str(company.get("owner_name") or "Asesor"), limit=12,
+                )
+                country_note = ""
+                if country_resolved.is_known:
+                    country_note = (
+                        f"[país detectado: {country_resolved.label_es} ({country_resolved.code})] "
+                    )
+                crm_result = upsert_contact({
+                    "name": client["name"],
+                    "phone": contact,
+                    "channel": "whatsapp",
+                    "summary": (country_note + hist_snip + "\n" + text)[:1500],
+                    "stage": "calificar",
+                    "is_first_contact": is_first_contact,
+                    "last_inbound_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+                    "detected_country": country_resolved.code if country_resolved.is_known else "",
+                    "interested_services": attribution.get("interested_services"),
+                    "utm_source": attribution.get("utm_source", ""),
+                    "utm_medium": attribution.get("utm_medium", ""),
+                    "utm_campaign": attribution.get("utm_campaign", ""),
+                    "utm_content": attribution.get("utm_content", ""),
+                })
+                if crm_result and crm_result.get("success"):
+                    lead_id = crm_result.get("commercial_lead_id")
+                    if lead_id:
+                        store.mark_crm_synced(company_alias, contact, int(lead_id))
+                else:
+                    store.mark_crm_pending(company_alias, contact)
+            except Exception:
                 store.mark_crm_pending(company_alias, contact)
-        except Exception:
-            store.mark_crm_pending(company_alias, contact)
-            logger.exception("CRM upsert prospect failed contact=%s", contact)
+                logger.exception("CRM upsert failed contact=%s", contact)
 
     # Human already took over this conversation -> stay silent but KEEP context.
     if store.is_paused(session):

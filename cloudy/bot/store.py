@@ -703,6 +703,37 @@ def mark_crm_pending(company: str, contact: str) -> None:
         )
 
 
+def begin_crm_upsert(company: str, contact: str) -> tuple[bool, bool]:
+    """
+    Reserve a CRM upsert slot (anti-race between parallel webhooks).
+
+    Returns (proceed, is_first_contact):
+      proceed=False — lead already synced or another thread is upserting.
+      is_first_contact=True — notify Katana only on genuine first capture.
+    """
+    with _lock, connect() as conn:
+        row = conn.execute(
+            "SELECT commercial_lead_id, crm_pending FROM crm_sync WHERE company=? AND contact=?",
+            (company, contact),
+        ).fetchone()
+        if row is not None:
+            if row["commercial_lead_id"]:
+                return False, False
+            if int(row["crm_pending"] or 0) == 2:
+                return False, False
+        is_first_contact = row is None
+        conn.execute(
+            """
+            INSERT INTO crm_sync (company, contact, crm_pending, crm_attempts)
+            VALUES (?, ?, 2, 0)
+            ON CONFLICT(company, contact) DO UPDATE SET
+                crm_pending=2
+            """,
+            (company, contact),
+        )
+        return True, is_first_contact
+
+
 def list_crm_pending(company: str, *, limit: int = 50) -> list[dict[str, Any]]:
     with _lock, connect() as conn:
         rows = conn.execute(
