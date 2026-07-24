@@ -1,0 +1,73 @@
+{
+  "_comment": "Motor multi-cloud del LLM de Cloudy. Copia a config/llm.json (gitignored). Orden: cada engine enabled se prueba; si falla pasa al siguiente. Mac: cursor-local primero. Edge (VPS): cursor-cloud primero (runtime cloud), sin ollama_local.",
+  "cooldown_seconds": 900,
+  "chain": [
+    {
+      "type": "cursor",
+      "label": "cursor-local-auto",
+      "model": "auto",
+      "runtime": "local",
+      "api_key_file": "config/cursor.json",
+      "timeout": 120,
+      "enabled": true,
+      "mac_only": true,
+      "_note": "Mac webhook — Cursor SDK local. Omitido en Edge."
+    },
+    {
+      "type": "cursor",
+      "label": "cursor-cloud-auto",
+      "model": "auto",
+      "runtime": "cloud",
+      "api_key_file": "config/cursor.json",
+      "cloud_repo": "https://github.com/YOUR_ORG/cloudy-bot-mirror.git",
+      "cloud_ref": "main",
+      "timeout": 120,
+      "enabled": true,
+      "allow_on_mac": true,
+      "channels": ["whatsapp", "webchat", "project_whatsapp", "edge"],
+      "_note": "Edge 24/7 — Cursor Cloud Agents. Mirror incluye kb/ + prompts/ + cloudy/bot (sin secretos). Requiere repo Git + Integrations en Cursor."
+    },
+    {
+      "type": "ollama_cloud",
+      "label": "ollama-cloud",
+      "model": "gpt-oss:120b-cloud",
+      "enabled": true
+    },
+    {
+      "type": "openai_compatible",
+      "label": "groq-llama",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key": "gsk_REEMPLAZA_CON_TU_KEY_DE_GROQ",
+      "model": "llama-3.3-70b-versatile",
+      "enabled": false
+    },
+    {
+      "type": "openai_compatible",
+      "label": "gemini-flash",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "api_key": "AIza_REEMPLAZA_CON_TU_KEY_DE_GEMINI",
+      "model": "gemini-2.5-flash",
+      "enabled": false
+    },
+    {
+      "type": "openai_compatible",
+      "label": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_file": "config/openrouter-api-token.txt",
+      "model": "moonshotai/kimi-k2:free",
+      "enabled": false
+    },
+    {
+      "type": "ollama_local",
+      "label": "local",
+      "model": "qwen3.5:9b",
+      "enabled": true,
+      "_note": "Solo Mac — filtrado en Edge."
+    },
+    {
+      "type": "katana",
+      "label": "openai-katana",
+      "enabled": true
+    }
+  ]
+}
