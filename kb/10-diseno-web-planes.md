@@ -30,7 +30,4 @@ Todos incluyen diseño y programación a medida (sin plantillas), primer año de
 - Ideal: portales, integraciones, procesos a medida
 
 Renovación de hosting/dominio: cotiza aparte según plan (referencia anual ~$150.000–$400.000 según alcance).
-
-**Nota:** La campaña de correo «landing desde $200.000» es una oferta aparte para leads fríos; no confundir con estos planes a medida.
-
 Cierre: ofrecer llamada de discovery gratuita para definir módulos exactos.

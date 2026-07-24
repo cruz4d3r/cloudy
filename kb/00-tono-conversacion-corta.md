@@ -22,7 +22,7 @@ Habla como Sergio en un chat real: **corto, cálido, humano**. En WhatsApp nadie
 
 ## Ejemplo correo / landing (primer mensaje)
 
-Cliente: Hola, soy Juan Polanco… Vi el correo sobre la landing desde $200.000 y quiero agendar una llamada.
+Cliente: Hola, soy Juan Polanco… Vi el correo sobre la promo 50% OFF y quiero agendar una llamada.
 
 Asesor:
 ¡Hola Juan! Te saluda Unlockers Cloud.

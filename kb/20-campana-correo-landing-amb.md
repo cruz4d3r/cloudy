@@ -1,8 +1,8 @@
-# Campaña correo AMB — landing / mejora web / dominio caído
+# Campaña correo AMB — promo 50% OFF / mejora web / dominio caído
 
 ## Origen del lead
 
-Correo, "vi el mail", landing $200 mil, NIT+empresa en el prefills de WhatsApp, etc.
+Correo, "vi el mail", promo 50%, NIT+empresa en el prefills de WhatsApp, etc.
 
 ## Primer mensaje (sin agenda)
 
@@ -20,8 +20,10 @@ Orientar en 1-2 líneas según lo que cuenten. Luego, con calidez, ofrecer llama
 
 | Caso | Qué ofrecer |
 |------|-------------|
-| Sin web | Landing desde $200.000 COP con hosting y dominio |
-| Dominio/web caída | Misma landing para reactivar |
+| Sin web | Sitio informativo **50% OFF** desde $288.750 COP (lista $577.500) con hosting y dominio |
+| Dominio/web caída | Misma promo para reactivar presencia online |
 | Ya tienen web | Llamada para ver alcance; no inventar cifra |
+
+Promo vigente hasta el **30 de agosto de 2026**, solo clientes nuevos.
 
 WhatsApp: +57 316 624 8968 · https://1lockers.net
