@@ -237,6 +237,10 @@ Responde SOLO un objeto JSON:
 # Cliente suele mandar la solicitud en varios WhatsApp seguidos. Esperamos esta
 # ventana de SILENCIO (se reinicia con cada mensaje nuevo) antes de responder.
 _GATHER_SECONDS = 60.0
+# Saludos cortos en ráfaga ("Hola Sergio" + "¿Cómo estás?"): ventana corta para unir burbujas.
+_GREETING_GATHER_SECONDS = 10.0
+# Si ya respondimos hace poco, no volver a saludar por un hola suelto.
+_GREETING_COOLDOWN_SECONDS = 120.0
 _REQUEST_HINT_RE = re.compile(
     r"(cambi|arreg|mejor|ajust|correg|agreg|quit|error|bug|ca[ií]d|no\s+carga|"
     r"no\s+funciona|roto|falla|solicitud|pantalla|formulario|pasarela|pago|"
@@ -381,6 +385,8 @@ def _arm_prospect_warmup(
 # Timers: una sola ventana por (empresa, contacto) desde el primer mensaje del lote.
 _gather_timers: dict[str, threading.Timer] = {}
 _gather_lock = threading.Lock()
+_inflight_lock = threading.Lock()
+_inflight_turns: set[str] = set()
 
 
 # ------------------------------------------------------------------ helpers
@@ -1031,6 +1037,68 @@ def _gather_key(company_alias: str, contact: str) -> str:
     return f"{company_alias}:{contact}"
 
 
+def _inflight_key(company_alias: str, contact: str) -> str:
+    return _gather_key(company_alias, contact)
+
+
+def _begin_inflight(key: str) -> bool:
+    with _inflight_lock:
+        if key in _inflight_turns:
+            return False
+        _inflight_turns.add(key)
+        return True
+
+
+def _end_inflight(key: str) -> None:
+    with _inflight_lock:
+        _inflight_turns.discard(key)
+
+
+def _assistant_replied_within(
+    company_alias: str,
+    contact: str,
+    *,
+    seconds: float,
+) -> bool:
+    """True if the bot already replied in the last N seconds."""
+    now = datetime.now(timezone.utc)
+    for turn in reversed(store.recent_turns(company_alias, contact, days=1, limit=12)):
+        if turn.get("role") != "assistant":
+            continue
+        ts_raw = str(turn.get("created_at") or "").strip()
+        if not ts_raw:
+            return True
+        try:
+            ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return True
+        return (now - ts).total_seconds() < seconds
+    return False
+
+
+def _is_opening_greeting(text: str, company: dict[str, Any]) -> bool:
+    """Saludo corto, con o sin nombre del dueño ('Hola Sergio' cuenta como saludo)."""
+    if _is_bare_greeting(text):
+        return True
+    owner = str(company.get("owner_name") or "Sergio")
+    stripped = _strip_owner_name_mentions(text, owner)
+    return _is_bare_greeting(stripped)
+
+
+def _gather_delay_for(text: str, company: dict[str, Any]) -> float | None:
+    """
+    Seconds to wait for silence before replying.
+    None = answer immediately (closing thanks).
+    """
+    if _is_closing_thanks(text, str(company.get("owner_name") or "Sergio")):
+        return None
+    if _is_opening_greeting(text, company):
+        return _GREETING_GATHER_SECONDS
+    return _GATHER_SECONDS
+
+
 def _cancel_gather_timer(company_alias: str, contact: str) -> None:
     key = _gather_key(company_alias, contact)
     with _gather_lock:
@@ -1088,6 +1156,7 @@ def _append_gather_buffer(
     wamid: str,
     *,
     start_new: bool,
+    gather_seconds: float = _GATHER_SECONDS,
 ) -> None:
     """
     Append inbound text to the gather buffer.
@@ -1097,7 +1166,7 @@ def _append_gather_buffer(
     """
     pending = dict(session.get("pending") or {})
     buffer = list(pending.get("buffer") or [])
-    gather_until = datetime.now(timezone.utc).timestamp() + _GATHER_SECONDS
+    gather_until = datetime.now(timezone.utc).timestamp() + gather_seconds
     if start_new:
         buffer = [text.strip()]
     else:
@@ -1106,6 +1175,7 @@ def _append_gather_buffer(
         "flow": "gather",
         "buffer": buffer[-40:],
         "gather_until": gather_until,
+        "gather_seconds": gather_seconds,
         "ack_sent": True,  # never send a visible ACK
     }
 
@@ -1118,23 +1188,31 @@ def _append_gather_buffer(
         company_alias, contact, pending=pending, history=history, last_inbound=wamid,
     )
     logger.info(
-        "gather buffer empresa=%s contact=%s msgs=%s silent=1 sliding=1",
-        company_alias, contact, len(pending.get("buffer") or []),
+        "gather buffer empresa=%s contact=%s msgs=%s silent=%.0fs",
+        company_alias, contact, len(pending.get("buffer") or []), gather_seconds,
     )
 
 
-def _should_gather_before_reply(
-    text: str, company: dict[str, Any], session: dict[str, Any],
-) -> bool:
-    """
-    True = wait for silence before answering (human multi-bubble chats).
-    Short greetings/thanks stay immediate; everything else waits ~60s.
-    """
-    if _is_bare_greeting(text):
-        return False
-    if _is_closing_thanks(text, str(company.get("owner_name") or "Sergio")):
-        return False
-    return True
+def _defer_to_gather(
+    company_alias: str,
+    company: dict[str, Any],
+    contact: str,
+    session: dict[str, Any],
+    text: str,
+    wamid: str,
+    profile_name: str,
+    *,
+    gather_seconds: float,
+    start_new: bool,
+) -> None:
+    """Buffer a message while another turn is in flight or during greeting cooldown."""
+    _append_gather_buffer(
+        company_alias, company, contact, session, text, wamid,
+        start_new=start_new, gather_seconds=gather_seconds,
+    )
+    _schedule_gather_flush(
+        company_alias, company, contact, profile_name, gather_seconds,
+    )
 
 
 def _flush_gather(
@@ -1174,6 +1252,59 @@ def _flush_gather(
 
 
 def _process_routed_turn(
+    company_alias: str,
+    company: dict[str, Any],
+    contact: str,
+    text: str,
+    profile_name: str,
+    wamid: str,
+    *,
+    already_in_history: bool = False,
+) -> None:
+    """Classify + reply for one (possibly combined) user turn."""
+    contact = normalize_number(contact)
+    inflight = _inflight_key(company_alias, contact)
+    if not _begin_inflight(inflight):
+        session = store.get_session(company_alias, contact)
+        delay = _gather_delay_for(text, company) or _GREETING_GATHER_SECONDS
+        _defer_to_gather(
+            company_alias, company, contact, session, text, wamid, profile_name,
+            gather_seconds=delay, start_new=False,
+        )
+        logger.info(
+            "turn en vuelo — mensaje rebuffered empresa=%s contact=%s",
+            company_alias, contact,
+        )
+        return
+
+    try:
+        session = store.get_session(company_alias, contact)
+        if (
+            _is_opening_greeting(text, company)
+            and _assistant_replied_within(
+                company_alias, contact, seconds=_GREETING_COOLDOWN_SECONDS,
+            )
+        ):
+            kind = _infer_msg_kind(text)
+            if not already_in_history:
+                history = _push_history(session, "user", text, kind=kind)
+                store.log_turn(company_alias, contact, "user", text, kind=kind, wamid=wamid)
+                store.save_session(company_alias, contact, history=history, last_inbound=wamid)
+            logger.info(
+                "saludo omitido (cooldown) empresa=%s contact=%s",
+                company_alias, contact,
+            )
+            return
+
+        _process_routed_turn_body(
+            company_alias, company, contact, text, profile_name, wamid,
+            already_in_history=already_in_history,
+        )
+    finally:
+        _end_inflight(inflight)
+
+
+def _process_routed_turn_body(
     company_alias: str,
     company: dict[str, Any],
     contact: str,
@@ -1770,13 +1901,15 @@ def handle_inbound(
     # Active gather window: keep buffering; each msg resets the silence timer.
     if pending.get("flow") == "gather":
         until = float(pending.get("gather_until") or 0)
+        gather_seconds = float(pending.get("gather_seconds") or _GATHER_SECONDS)
         now_ts = datetime.now(timezone.utc).timestamp()
         if until and now_ts < until:
             _append_gather_buffer(
-                company_alias, company, contact, session, text, wamid, start_new=False,
+                company_alias, company, contact, session, text, wamid,
+                start_new=False, gather_seconds=gather_seconds,
             )
             _schedule_gather_flush(
-                company_alias, company, contact, profile_name, _GATHER_SECONDS,
+                company_alias, company, contact, profile_name, gather_seconds,
             )
             return
         # Window expired but timer missed: flush including this message.
@@ -1793,19 +1926,17 @@ def handle_inbound(
         return
 
     # New turn: wait for silence so the client can finish typing (human feel).
-    if _should_gather_before_reply(text, company, session):
-        _append_gather_buffer(
-            company_alias, company, contact, session, text, wamid, start_new=True,
-        )
-        _schedule_gather_flush(
-            company_alias, company, contact, profile_name, _GATHER_SECONDS,
+    gather_delay = _gather_delay_for(text, company)
+    if gather_delay is None:
+        _process_routed_turn(
+            company_alias, company, contact, text, profile_name, wamid,
+            already_in_history=False,
         )
         return
 
-    # Short consult / greeting: answer now.
-    _process_routed_turn(
-        company_alias, company, contact, text, profile_name, wamid,
-        already_in_history=False,
+    _defer_to_gather(
+        company_alias, company, contact, session, text, wamid, profile_name,
+        gather_seconds=gather_delay, start_new=True,
     )
 
 
