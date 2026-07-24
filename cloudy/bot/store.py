@@ -165,6 +165,7 @@ def connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
     _migrate_message_log(conn)
+    _migrate_sessions(conn)
     return conn
 
 
@@ -175,6 +176,18 @@ def _migrate_message_log(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE message_log ADD COLUMN llm_engine TEXT DEFAULT ''")
     if "llm_model" not in cols:
         conn.execute("ALTER TABLE message_log ADD COLUMN llm_model TEXT DEFAULT ''")
+    conn.commit()
+
+
+def _migrate_sessions(conn: sqlite3.Connection) -> None:
+    """Add contact country columns for market-aware replies."""
+    cols = {str(row[1]) for row in conn.execute("PRAGMA table_info(sessions)")}
+    if "contact_country" not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN contact_country TEXT DEFAULT ''")
+    if "country_source" not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN country_source TEXT DEFAULT ''")
+    if "country_asked" not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN country_asked INTEGER DEFAULT 0")
     conn.commit()
 
 
@@ -194,6 +207,7 @@ def get_session(company: str, contact: str) -> dict[str, Any]:
                 "company": company, "contact": contact, "client_alias": "",
                 "client_name": "", "paused_until": None, "paused_reason": "",
                 "history": [], "pending": {}, "last_inbound": None,
+                "contact_country": "", "country_source": "", "country_asked": 0,
             }
         data = dict(row)
         data["history"] = json.loads(data.get("history") or "[]")
@@ -206,6 +220,7 @@ def save_session(company: str, contact: str, **fields: Any) -> None:
     allowed = {
         "client_alias", "client_name", "paused_until", "paused_reason",
         "history", "pending", "last_inbound",
+        "contact_country", "country_source", "country_asked",
     }
     updates: dict[str, Any] = {}
     for key, value in fields.items():

@@ -78,6 +78,31 @@ def _load_role_prompt(role: str, fallback: str) -> str:
         return fallback
 
 
+def _extract_phone_from_profile(profile_context: str) -> str:
+    for line in (profile_context or "").splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("tel:"):
+            return "".join(ch for ch in stripped.split(":", 1)[-1] if ch.isdigit())
+    return ""
+
+
+def _country_prompt_from_profile(profile_context: str, user_message: str) -> str:
+    from cloudy.bot.contact_country import detect_from_text, infer_from_phone, prompt_block, resolve_country
+
+    phone = _extract_phone_from_profile(profile_context)
+    explicit = detect_from_text(user_message)
+    session: dict[str, str] = {}
+    if explicit is not None:
+        session = {"contact_country": explicit.code, "country_source": explicit.source}
+    resolved = resolve_country(
+        phone,
+        session,
+        user_message,
+        user_message_count=1 if user_message.strip() else 0,
+    )
+    return prompt_block(resolved)
+
+
 def _build_messages(
     raw_messages: list[dict[str, str]],
     *,
@@ -118,6 +143,8 @@ def _build_messages(
     system += f"\nCanal: {channel}.\n"
     if profile_context.strip():
         system += f"Perfil del contacto:\n{profile_context.strip()}\n"
+    if not is_project:
+        system += _country_prompt_from_profile(profile_context, last_user)
     system += f"Conocimiento {'del proyecto' if is_project else 'comercial'} (usa solo esto + el hilo):\n{kb_block}\n"
     if is_project:
         system += (

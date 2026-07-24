@@ -1,5 +1,5 @@
 {
-  "_comment": "Motor multi-cloud del LLM de Cloudy. Copia a config/llm.json (gitignored). Orden: cada engine enabled se prueba; si falla pasa al siguiente. Mac: cursor-local primero. Edge (VPS): cursor-cloud primero (runtime cloud), sin ollama_local.",
+  "_comment": "Motor multi-cloud del LLM de Cloudy. Copia a config/llm.json (gitignored). Orden: cada engine enabled se prueba; si falla pasa al siguiente. Mac: cursor-local → cursor-cloud → ollama-cloud → … Edge (VPS): omite engines cursor y ollama_local (cloudy/edge/llm.py); usa ollama-cloud, groq, gemini, etc.",
   "cooldown_seconds": 900,
   "chain": [
     {
@@ -25,7 +25,7 @@
       "enabled": true,
       "allow_on_mac": true,
       "channels": ["whatsapp", "webchat", "project_whatsapp", "edge"],
-      "_note": "Edge 24/7 — Cursor Cloud Agents. Mirror incluye kb/ + prompts/ + cloudy/bot (sin secretos). Requiere repo Git + Integrations en Cursor."
+      "_note": "Fallback Mac si cursor-local falla (allow_on_mac). Edge NO usa engines cursor — solo Mac webhook. Mirror Git para auditorías Cursor Cloud en Mac."
     },
     {
       "type": "ollama_cloud",

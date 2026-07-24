@@ -180,7 +180,7 @@ Sí, funciona sin importar dónde tengas alojada tu página hoy. No necesitas ca
 
 ### ¿Dónde están ubicados?
 
-Tenemos presencia en 3 países: 
+Tenemos presencia en 3 países: **Colombia** (sede en Bucaramanga), **México** y **Estados Unidos**. Atendemos clientes en Latinoamérica de forma remota.
 
 ### ¿Cuántos años lleva funcionando la empresa?
 

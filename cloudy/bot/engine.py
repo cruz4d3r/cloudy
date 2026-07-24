@@ -61,6 +61,44 @@ TONO INNEGOCIABLE (clientes y leads):
 - Máximo 3-4 frases cortas; una sola pregunta si hace falta.
 """
 
+def _sync_contact_country(
+    company_alias: str,
+    contact: str,
+    session: dict[str, Any],
+    text: str,
+) -> Any:
+    """Resolve market from phone/text/session and persist on the WA session."""
+    from cloudy.bot.contact_country import resolve_country, session_country_fields
+
+    user_msgs = store.count_user_messages(company_alias, contact)
+    resolved = resolve_country(contact, session, text, user_message_count=user_msgs)
+    fields = session_country_fields(resolved)
+    if (
+        str(session.get("contact_country") or "") != fields["contact_country"]
+        or str(session.get("country_source") or "") != fields["country_source"]
+    ):
+        store.save_session(company_alias, contact, **fields)
+        session.update(fields)
+    return resolved
+
+
+def _finalize_reply_country(
+    company_alias: str,
+    contact: str,
+    session: dict[str, Any],
+    reply: str,
+    text: str,
+) -> str:
+    """Append one-time country question when prefix is ambiguous."""
+    from cloudy.bot.contact_country import append_country_ask, resolve_country
+
+    user_msgs = store.count_user_messages(company_alias, contact)
+    resolved = resolve_country(contact, session, text, user_message_count=user_msgs)
+    out = append_country_ask(reply, resolved)
+    if resolved.should_ask and out != reply and not int(session.get("country_asked") or 0):
+        store.save_session(company_alias, contact, country_asked=1)
+    return out
+
 # Outbound gate: if the text matches, never send it — use warm fallback instead.
 _MACHINE_REPLY_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(el|la)\s+cliente\b", re.I),
@@ -1156,6 +1194,7 @@ def _process_routed_turn(
             "prospect": True,
         }
     client = _enrich_client(contact, client, company_alias=company_alias)
+    _sync_contact_country(company_alias, contact, session, text)
 
     meeting_state = meeting_awareness.meeting_state(
         company_alias, company, contact, session=session, client=client,
@@ -1287,6 +1326,7 @@ def _process_routed_turn(
         reply or "", client, company, context=reply_context,
         meeting_state=meeting_state,
     )
+    outbound = _finalize_reply_country(company_alias, contact, session, outbound, text)
     owner_name = str(company.get("owner_name") or "Sergio")
     snippet = _history_snippet(company_alias, contact, session, owner_name, limit=20)
     proposed_slot = meeting_awareness.capture_slot_proposal(outbound, company, snippet)
@@ -1420,6 +1460,12 @@ def _answer_query(
     display_brand = str(company.get("display_name") or company_alias).strip()
     system = str(company.get("identity_prompt") or "Eres un asistente profesional.")
     system += _CLIENT_VOICE_GUARDRAIL
+
+    from cloudy.bot.contact_country import prompt_block, resolve_country
+
+    user_msgs = store.count_user_messages(company_alias, contact)
+    resolved_country = resolve_country(contact, session, text, user_message_count=user_msgs)
+    system += prompt_block(resolved_country)
 
     # Role-specific prompt overlay (sales / client / project).
     try:
@@ -1602,6 +1648,7 @@ def handle_inbound(
             "prospect": True,
         }
     client = _enrich_client(contact, client, company_alias=company_alias)
+    country_resolved = _sync_contact_country(company_alias, contact, session, text)
 
     prior_user_msgs = store.count_user_messages(company_alias, contact)
     is_first_contact = prior_user_msgs == 0
@@ -1619,13 +1666,17 @@ def handle_inbound(
             stage = "calificar"
             if _is_commercial_lead(text, client):
                 stage = "calificar"
+            country_note = ""
+            if country_resolved.is_known:
+                country_note = f"[país detectado: {country_resolved.label_es} ({country_resolved.code})] "
             crm_result = upsert_contact({
                 "name": client["name"],
                 "phone": contact,
                 "channel": "whatsapp",
-                "summary": (hist_snip + "\n" + text)[:1500],
+                "summary": (country_note + hist_snip + "\n" + text)[:1500],
                 "stage": stage,
                 "is_first_contact": is_first_contact,
+                "detected_country": country_resolved.code if country_resolved.is_known else "",
                 "interested_services": attribution.get("interested_services"),
                 "utm_source": attribution.get("utm_source", ""),
                 "utm_medium": attribution.get("utm_medium", ""),
