@@ -303,6 +303,20 @@ def count_user_messages(company: str, contact: str) -> int:
     return int(row["n"] if row else 0)
 
 
+def last_user_message_at(company: str, contact: str) -> str | None:
+    """ISO timestamp of the latest inbound user turn (for nurture eligibility)."""
+    with _lock, connect() as conn:
+        row = conn.execute(
+            "SELECT created_at FROM message_log"
+            " WHERE company=? AND contact=? AND role='user'"
+            " ORDER BY created_at DESC LIMIT 1",
+            (company, contact),
+        ).fetchone()
+    if not row or not row["created_at"]:
+        return None
+    return str(row["created_at"])
+
+
 def recent_turns(
     company: str,
     contact: str,

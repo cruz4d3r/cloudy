@@ -1676,6 +1676,7 @@ def handle_inbound(
                 "summary": (country_note + hist_snip + "\n" + text)[:1500],
                 "stage": stage,
                 "is_first_contact": is_first_contact,
+                "last_inbound_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
                 "detected_country": country_resolved.code if country_resolved.is_known else "",
                 "interested_services": attribution.get("interested_services"),
                 "utm_source": attribution.get("utm_source", ""),
