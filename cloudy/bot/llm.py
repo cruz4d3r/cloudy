@@ -35,7 +35,9 @@ from typing import Any
 from cloudy.bot.config import (
     llm_chain,
     llm_cooldown_seconds,
+    llm_profiles,
     ollama_config,
+    resolve_llm_profile,
 )
 from cloudy.bot.runtime_env import is_edge_runtime
 from cloudy.paths import ROOT as REPO_ROOT
@@ -391,6 +393,33 @@ def _run_engine(
     raise LLMError(f"tipo de engine desconocido: '{etype}'")
 
 
+def _apply_profile_order(engines: list[dict[str, Any]], channel: str) -> list[dict[str, Any]]:
+    """Reorder/filter engines when llm.json defines a profile for this channel."""
+    profile_name = resolve_llm_profile(channel)
+    if not profile_name:
+        return engines
+    labels = llm_profiles().get(profile_name)
+    if not labels:
+        return engines
+    by_label = {
+        str(engine.get("label") or engine.get("type") or ""): engine
+        for engine in engines
+    }
+    ordered: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for label in labels:
+        engine = by_label.get(label)
+        if engine is None or label in seen:
+            continue
+        ordered.append(engine)
+        seen.add(label)
+    for engine in engines:
+        label = str(engine.get("label") or engine.get("type") or "")
+        if label not in seen:
+            ordered.append(engine)
+    return ordered
+
+
 def _build_engine_chain(
     cfg: dict[str, Any],
     *,
@@ -420,6 +449,10 @@ def _build_engine_chain(
             if etype == "katana" and not allow_cloud_fallback:
                 continue
             if etype == "cursor":
+                # Cursor Agent runs with full repo cwd — must NOT answer WhatsApp
+                # (reads unrelated client work from the monorepo / IDE context).
+                if channel in ("whatsapp", "project_whatsapp"):
+                    continue
                 runtime = str(engine.get("runtime") or "local").strip().lower()
                 if is_edge_runtime():
                     # Edge VPS has no bundled Node; cursor-cloud-auto caused 503 FileNotFoundError.
@@ -432,7 +465,7 @@ def _build_engine_chain(
                 if allowed and channel not in allowed:
                     continue
             engines.append(engine)
-        return engines
+        return _apply_profile_order(engines, channel)
 
     # No llm.json: classic chain from the ollama block.
     if want_cloud and cfg["cloud_enabled"]:
@@ -513,6 +546,7 @@ def chat(
     profile_context: str = "",
     allow_cloud_fallback: bool = True,
     use_ollama_cloud: bool | None = None,
+    fmt: str | None = None,
 ) -> str:
     """
     Single non-streaming chat completion, Ollama-Cloud-first when enabled.
@@ -595,7 +629,7 @@ def chat(
     )
     content, label, model = _run_chain(
         engines, messages, options=options, think=use_think,
-        keep_alive=keep_alive or _DEFAULT_KEEP_ALIVE, timeout=90, fmt=None,
+        keep_alive=keep_alive or _DEFAULT_KEEP_ALIVE, timeout=90, fmt=fmt,
         channel=channel, profile_context=profile_context,
         cooldown_seconds=llm_cooldown_seconds(),
     )
@@ -710,13 +744,13 @@ def describe_chain() -> list[dict[str, Any]]:
     return out
 
 
-def diagnostic_chat(prompt: str, *, timeout: int = 90) -> dict[str, Any]:
+def diagnostic_chat(prompt: str, *, timeout: int = 90, channel: str = "diagnostic") -> dict[str, Any]:
     """
     Run one prompt through the engine chain and report which engine answered and
     how long it took. Used by `cloudy llm test` to verify the failover.
     """
     cfg = ollama_config()
-    engines = _build_engine_chain(cfg, want_cloud=True, allow_cloud_fallback=True)
+    engines = _build_engine_chain(cfg, want_cloud=True, allow_cloud_fallback=True, channel=channel)
     messages = [{"role": "user", "content": prompt}]
     options = {"temperature": 0.4, "num_ctx": 4096, "num_predict": 300}
     start = time.time()
@@ -733,6 +767,96 @@ def diagnostic_chat(prompt: str, *, timeout: int = 90) -> dict[str, Any]:
         "content": content,
         "chain": [str(e.get("label") or e.get("type")) for e in engines],
     }
+
+
+def probe_engines(
+    *,
+    label: str | None = None,
+    channel: str = "",
+    timeout: int = 90,
+    include_katana: bool = False,
+) -> list[dict[str, Any]]:
+    """
+    Probe each enabled engine individually (no chained fallback).
+
+    Used by `cloudy llm probe` for health checks and hourly monitoring.
+    """
+    cfg = ollama_config()
+    engines = _build_engine_chain(
+        cfg,
+        want_cloud=True,
+        allow_cloud_fallback=include_katana,
+        channel=channel,
+    )
+    if label:
+        engines = [
+            engine
+            for engine in engines
+            if str(engine.get("label") or engine.get("type") or "") == label
+        ]
+    if not include_katana:
+        engines = [engine for engine in engines if str(engine.get("type") or "") != "katana"]
+
+    messages = [{"role": "user", "content": "Responde solo: OK"}]
+    options = {"temperature": 0.0, "num_ctx": 2048, "num_predict": 32}
+    results: list[dict[str, Any]] = []
+
+    for engine in engines:
+        engine_label = str(engine.get("label") or engine.get("type") or "engine")
+        engine_timeout = int(engine.get("timeout") or timeout)
+        started = time.time()
+        item: dict[str, Any] = {
+            "label": engine_label,
+            "type": engine.get("type"),
+            "model": engine.get("model", ""),
+            "ok": False,
+            "latency_ms": 0,
+            "error": "",
+        }
+        try:
+            content = _run_engine(
+                engine,
+                messages,
+                options=options,
+                think=False,
+                keep_alive=_DEFAULT_KEEP_ALIVE,
+                timeout=engine_timeout,
+                fmt=None,
+                channel=channel or "probe",
+                profile_context="",
+            )
+            item["latency_ms"] = int((time.time() - started) * 1000)
+            item["ok"] = bool(str(content or "").strip())
+            if not item["ok"]:
+                item["error"] = "empty content"
+        except LLMQuotaError as exc:
+            item["latency_ms"] = int((time.time() - started) * 1000)
+            item["error"] = f"quota: {exc}"[:200]
+        except LLMError as exc:
+            item["latency_ms"] = int((time.time() - started) * 1000)
+            item["error"] = str(exc)[:200]
+        except Exception as exc:  # noqa: BLE001
+            item["latency_ms"] = int((time.time() - started) * 1000)
+            item["error"] = str(exc)[:200]
+        results.append(item)
+
+    return results
+
+
+def cloud_engines_all_in_cooldown(channel: str = "whatsapp") -> bool:
+    """True when every cloud engine in the profile chain is in cooldown."""
+    cfg = ollama_config()
+    engines = _build_engine_chain(cfg, want_cloud=True, allow_cloud_fallback=False, channel=channel)
+    cloud_types = {"ollama_cloud", "openai_compatible", "cursor"}
+    cloud_labels = [
+        str(engine.get("label") or "")
+        for engine in engines
+        if str(engine.get("type") or "") in cloud_types
+    ]
+    if not cloud_labels:
+        return False
+    cooling = cooldown_status()
+    return all(cooling.get(label, 0) > 0 for label in cloud_labels)
 
 
 def warmup(model: str | None = None) -> None:

@@ -1,6 +1,30 @@
 {
-  "_comment": "Motor multi-cloud del LLM de Cloudy. Copia a config/llm.json (gitignored). Orden: cada engine enabled se prueba; si falla pasa al siguiente. Mac: cursor-local → cursor-cloud → ollama-cloud → … Edge (VPS): omite engines cursor y ollama_local (cloudy/edge/llm.py); usa ollama-cloud, groq, gemini, etc.",
+  "_comment": "Motor multi-cloud del LLM de Cloudy. Copia a config/llm.json (gitignored). Mac: cursor → cloud → local → katana. Edge: omite cursor y ollama_local.",
   "cooldown_seconds": 900,
+  "profiles": {
+    "whatsapp": {
+      "chain_labels": [
+        "ollama-cloud",
+        "groq-gpt-oss",
+        "groq-llama",
+        "gemini-flash",
+        "openrouter",
+        "local",
+        "openai-katana"
+      ]
+    },
+    "batch": {
+      "chain_labels": [
+        "local",
+        "openrouter",
+        "gemini-flash",
+        "ollama-cloud",
+        "groq-llama",
+        "groq-gpt-oss",
+        "openai-katana"
+      ]
+    }
+  },
   "chain": [
     {
       "type": "cursor",
@@ -11,7 +35,8 @@
       "timeout": 120,
       "enabled": true,
       "mac_only": true,
-      "_note": "Mac webhook — Cursor SDK local. Omitido en Edge."
+      "channels": ["webchat", "edge"],
+      "_note": "Mac webhook — Cursor SDK local. PROHIBIDO en whatsapp."
     },
     {
       "type": "cursor",
@@ -19,13 +44,10 @@
       "model": "auto",
       "runtime": "cloud",
       "api_key_file": "config/cursor.json",
-      "cloud_repo": "https://github.com/YOUR_ORG/cloudy-bot-mirror.git",
-      "cloud_ref": "main",
       "timeout": 120,
       "enabled": true,
       "allow_on_mac": true,
-      "channels": ["whatsapp", "webchat", "project_whatsapp", "edge"],
-      "_note": "Fallback Mac si cursor-local falla (allow_on_mac). Edge NO usa engines cursor — solo Mac webhook. Mirror Git para auditorías Cursor Cloud en Mac."
+      "channels": ["webchat", "edge"]
     },
     {
       "type": "ollama_cloud",
@@ -35,27 +57,36 @@
     },
     {
       "type": "openai_compatible",
+      "label": "groq-gpt-oss",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key_file": "config/groq-api-key.txt",
+      "model": "openai/gpt-oss-120b",
+      "enabled": true
+    },
+    {
+      "type": "openai_compatible",
       "label": "groq-llama",
       "base_url": "https://api.groq.com/openai/v1",
-      "api_key": "gsk_REEMPLAZA_CON_TU_KEY_DE_GROQ",
+      "api_key_file": "config/groq-api-key.txt",
       "model": "llama-3.3-70b-versatile",
-      "enabled": false
+      "enabled": true
     },
     {
       "type": "openai_compatible",
       "label": "gemini-flash",
       "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "api_key": "AIza_REEMPLAZA_CON_TU_KEY_DE_GEMINI",
+      "api_key_file": "config/gemini-api-key.txt",
       "model": "gemini-2.5-flash",
-      "enabled": false
+      "image_model": "gemini-2.5-flash-image",
+      "enabled": true
     },
     {
       "type": "openai_compatible",
       "label": "openrouter",
       "base_url": "https://openrouter.ai/api/v1",
       "api_key_file": "config/openrouter-api-token.txt",
-      "model": "moonshotai/kimi-k2:free",
-      "enabled": false
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "enabled": true
     },
     {
       "type": "ollama_local",

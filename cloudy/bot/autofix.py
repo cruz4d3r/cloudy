@@ -67,6 +67,9 @@ _SECRET_FILES = (
     "media-api-token.txt",
     "mac-proxy-token.txt",
     "bot-m2m-hmac-secret.txt",
+    "groq-api-key.txt",
+    "gemini-api-key.txt",
+    "openrouter-api-token.txt",
 )
 
 
@@ -269,6 +272,14 @@ def _builtin_rules(cfg: dict[str, Any]) -> list[AutofixRule]:
             action="remediate_llm_chain",
             description="Cadena LLM agotada — Node, secretos y reinicio bot",
             cooldown_min=25,
+            severity="alert",
+        ),
+        AutofixRule(
+            rule_id="llm_cloud_all_cooldown",
+            patterns=[re.compile(r"__proactive_llm_cloud_cooldown__")],
+            action="notify_manual",
+            description="Todos los engines cloud en cooldown — revisar cuotas Groq/Gemini/OpenRouter",
+            cooldown_min=45,
             severity="alert",
         ),
         AutofixRule(
@@ -705,6 +716,23 @@ def run_autofix(
                 sample=public_msg,
             )
         )
+    try:
+        from cloudy.bot.llm import cloud_engines_all_in_cooldown
+
+        if cloud_engines_all_in_cooldown("whatsapp") and not any(
+            m.rule_id == "llm_cloud_all_cooldown" for m in matches
+        ):
+            matches.append(
+                MatchResult(
+                    rule_id="llm_cloud_all_cooldown",
+                    action="notify_manual",
+                    description="Todos los engines cloud WA en cooldown",
+                    severity="alert",
+                    sample="cloud_engines_all_in_cooldown",
+                )
+            )
+    except Exception as exc:
+        logger.debug("llm cooldown probe skipped: %s", exc)
     report.matches = matches
 
     if force_rule:

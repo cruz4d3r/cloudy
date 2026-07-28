@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from cloudy.bot import agenda_nudge, meeting_awareness, scheduler, store
-from cloudy.bot.config import is_owner, normalize_number, resolve_client
+from cloudy.bot.config import is_bot_silent, is_owner, normalize_number, resolve_client
 from cloudy.bot.llm import LLMError, chat, classify_json, pop_chat_meta
 from cloudy.bot.wa_client import WhatsAppError, notify_owner, send_text
 
@@ -31,6 +31,20 @@ logger = logging.getLogger("cloudy.bot")
 
 # Words that force an immediate handoff to a human, no LLM involved.
 _HANDOFF_WORDS = ("asesor", "humano", "persona real", "hablar con sergio")
+
+# Internal / cross-client jargon that must never reach a WhatsApp contact.
+# Cursor-local-auto once leaked DeColombia + TC Seguros context to a family chat.
+_WORKSPACE_BLEED_PATTERNS = (
+    re.compile(r"david\s+yurman", re.IGNORECASE),
+    re.compile(r"letras\s+pegadas", re.IGNORECASE),
+    re.compile(r"estilo\s+david\s+yurman", re.IGNORECASE),
+    re.compile(r"jet-mobile-menu", re.IGNORECASE),
+    re.compile(r"decolombiajoyas\.com", re.IGNORECASE),
+    re.compile(r"wx\.decolombiajoyas", re.IGNORECASE),
+    re.compile(r"tcseguros\.com", re.IGNORECASE),
+    re.compile(r"dieciseisavos", re.IGNORECASE),
+    re.compile(r"retomo\s+ya\s+lo\s+del", re.IGNORECASE),
+)
 
 # Default phrases Sergio can type INTO a client chat (from his phone or
 # WhatsApp Web) to silence the bot in that single conversation for a full day.
@@ -989,6 +1003,17 @@ def _polish_client_reply(
             reply[:160],
         )
         return _fallback_warm_reply(client, company, context=context)
+    if _looks_like_workspace_bleed(reply, client):
+        logger.error(
+            "reply bloqueado (fuga contexto repo/otro cliente): %s",
+            reply[:200],
+        )
+        notify_owner(
+            company,
+            f"[ALERTA] Bot bloqueó respuesta con jerga interna para {client.get('name')} "
+            f"({client.get('number', '')}): {reply[:180]}",
+        )
+        return _fallback_warm_reply(client, company, context=context)
     # Soft rewrite if a single slip survived (e.g. "El cliente" → "Tú").
     reply = re.sub(r"\b[Ee]l cliente\b", "Tú", reply)
     reply = re.sub(r"\b[Ll]a cliente\b", "Tú", reply)
@@ -1011,6 +1036,38 @@ def _request_client_ack(
         f"{greet}, ya lo tengo{site_bit}. Lo revisamos y te escribo por aquí.\n\n"
         f"Si me faltó algo, me lo dices sin pena."
     )
+
+
+def _looks_like_workspace_bleed(reply: str, client: dict[str, Any]) -> bool:
+    """
+    Block replies that leak internal monorepo / other-client context into WA.
+
+    True chat models only see the prompt; Cursor Agent reads the whole repo.
+    """
+    text = (reply or "").strip()
+    if not text:
+        return False
+    aliases = {str(a).lower() for a in (client.get("cloudy_aliases") or []) if str(a).strip()}
+    sites = {str(s).lower() for s in (client.get("sites") or []) if str(s).strip()}
+    allowed = aliases | sites
+
+    decolombia_contact = "decolombiajoyas" in allowed or any(
+        "decolombiajoyas" in s for s in allowed
+    )
+    tc_contact = "tcseguros" in allowed or any("tcseguros" in s for s in allowed)
+
+    for pattern in _WORKSPACE_BLEED_PATTERNS:
+        if not pattern.search(text):
+            continue
+        pat = pattern.pattern.lower()
+        if "decolombia" in pat or "david" in pat or "yurman" in pat or "jet-mobile" in pat:
+            if decolombia_contact:
+                continue
+        if "tcseguros" in pat or "dieciseisavos" in pat or "letras" in pat:
+            if tc_contact:
+                continue
+        return True
+    return False
 
 
 def _recent_human_in_history(session: dict[str, Any], *, seconds: float = 120.0) -> bool:
@@ -1323,8 +1380,25 @@ def _process_routed_turn_body(
             "name": (profile_name or "").strip() or "Cliente",
             "sites": [],
             "prospect": True,
+            "number": contact,
         }
+    else:
+        client = dict(client)
+        client.setdefault("number", contact)
     client = _enrich_client(contact, client, company_alias=company_alias)
+
+    if is_bot_silent(company, contact) or store.is_paused(session):
+        kind = _infer_msg_kind(text)
+        if not already_in_history:
+            history = _push_history(session, "user", text, kind=kind)
+            store.log_turn(company_alias, contact, "user", text, kind=kind, wamid=wamid)
+            store.save_session(company_alias, contact, history=history, last_inbound=wamid)
+        logger.info(
+            "turn omitido (bot_silent/pausa) empresa=%s contact=%s",
+            company_alias, contact,
+        )
+        return
+
     _sync_contact_country(company_alias, contact, session, text)
 
     meeting_state = meeting_awareness.meeting_state(
@@ -1771,6 +1845,20 @@ def handle_inbound(
     session = store.get_session(company_alias, contact)
     client = resolve_client(company, contact)
 
+    if is_bot_silent(company, contact):
+        kind = _infer_msg_kind(text)
+        history = _push_history(session, "user", text, kind=kind)
+        store.log_turn(company_alias, contact, "user", text, kind=kind, wamid=wamid)
+        store.save_session(
+            company_alias, contact,
+            history=history, last_inbound=wamid,
+        )
+        logger.info(
+            "inbound bot_silent — solo log empresa=%s contact=%s",
+            company_alias, contact,
+        )
+        return
+
     if client is None:
         client = {
             "alias": f"prospect_{contact}",
@@ -2023,7 +2111,7 @@ def handle_outbound_echo(
     )
     store.pause_session(
         company_alias, contact,
-        hours=float(company.get("resume_after_hours") or 6),
+        hours=float(company.get("takeover_pause_hours") or _TAKEOVER_PAUSE_HOURS),
         reason="intervención humana (celular/WhatsApp Web)",
     )
 

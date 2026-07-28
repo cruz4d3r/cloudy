@@ -140,6 +140,39 @@ def llm_cooldown_seconds() -> int:
     return value if value > 0 else DEFAULT_LLM_COOLDOWN_SECONDS
 
 
+def llm_profiles() -> dict[str, list[str]]:
+    """
+    Optional per-channel engine order from llm.json profiles.
+
+    Keys: profile name (e.g. whatsapp, batch). Values: ordered engine labels.
+    """
+    data = llm_config() or {}
+    raw = data.get("profiles")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, list[str]] = {}
+    for name, block in raw.items():
+        if not isinstance(block, dict):
+            continue
+        labels = block.get("chain_labels")
+        if not isinstance(labels, list):
+            continue
+        cleaned = [str(label).strip() for label in labels if str(label).strip()]
+        if cleaned:
+            out[str(name)] = cleaned
+    return out
+
+
+def resolve_llm_profile(channel: str) -> str | None:
+    """Map runtime channel to a profile name when configured."""
+    ch = str(channel or "").strip().lower()
+    if ch in ("whatsapp", "project_whatsapp"):
+        return "whatsapp"
+    if ch == "batch":
+        return "batch"
+    return None
+
+
 def is_listen_only(company: dict[str, Any]) -> bool:
     """True when webhook should capture traffic but never auto-reply."""
     return _as_bool(company.get("listen_only"), False)
@@ -302,6 +335,23 @@ def resolve_client(company: dict[str, Any], wa_number: str) -> dict[str, Any] | 
         if normalize_number(key) == number:
             return {"number": number, **info}
     return None
+
+
+def is_bot_silent(company: dict[str, Any], wa_number: str) -> bool:
+    """
+    Contacts that must never receive automated bot replies (family, VIP human-only).
+
+    Set per client: clients.<number>.bot_silent=true
+    Or company-wide list: bot_silent_numbers: ["573..."]
+    """
+    client = resolve_client(company, wa_number)
+    if client and _as_bool(client.get("bot_silent") or client.get("human_only"), False):
+        return True
+    number = normalize_number(wa_number)
+    for raw in company.get("bot_silent_numbers") or []:
+        if normalize_number(str(raw)) == number:
+            return True
+    return False
 
 
 def is_owner(company: dict[str, Any], wa_number: str) -> bool:
