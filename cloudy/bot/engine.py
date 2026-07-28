@@ -111,6 +111,10 @@ def _finalize_reply_country(
     out = append_country_ask(reply, resolved)
     if resolved.should_ask and out != reply and not int(session.get("country_asked") or 0):
         store.save_session(company_alias, contact, country_asked=1)
+    if re.search(r"\b(m[eé]xico|mexico|mxn|desde m[eé]xico)\b", text or "", re.I):
+        low = out.lower()
+        if not any(token in low for token in ("méxico", "mexico", "mxn", "spei")):
+            out = out.rstrip() + " Trabajamos con clientes en México y podemos cotizar en MXN."
     return out
 
 # Outbound gate: if the text matches, never send it — use warm fallback instead.
@@ -288,11 +292,14 @@ _EMAIL_INTENT_RE = re.compile(
 
 
 def _is_email_landing_lead(text: str) -> bool:
-    """Lead caliente desde campaña correo AMB (prefill WA con NIT / landing $200k)."""
+    """Lead caliente desde campaña correo AMB (prefill WA con NIT / landing $200k / promo 50%)."""
     t = (text or "").strip()
     if not t:
         return False
     from_mail = bool(_EMAIL_FROM_RE.search(t))
+    promo_50 = bool(re.search(r"50\s*%|50\s*off", t, re.I))
+    if from_mail and promo_50:
+        return True
     campaign = bool(_EMAIL_CAMPAIGN_RE.search(t))
     intent = bool(_EMAIL_INTENT_RE.search(t))
     prefill = "soy " in t.lower() and "nit" in t.lower()
@@ -305,6 +312,17 @@ _COMMERCIAL_NEED_RE = re.compile(
     r"p[aá]gina|nit|agendar|llamada|cita|reuni[oó]n)\b",
     re.I,
 )
+
+_PRICE_Q_RE = re.compile(
+    r"\b(cu[aá]nto cuesta|cu[aá]nto vale|precio|valen|costo|desde \$)\b",
+    re.I,
+)
+_QUOTE_Q_RE = re.compile(r"\b(cotizaci[oó]n|cotizar|propuesta)\b", re.I)
+_SECURITY_Q_RE = re.compile(
+    r"\b(hackead|virus|malware|rescate|ataque|página\s+ca[ií]da)\b",
+    re.I,
+)
+_MEXICO_Q_RE = re.compile(r"\b(m[eé]xico|mexico|mxn|desde m[eé]xico)\b", re.I)
 
 _FAKE_BOOKING_RE = re.compile(
     r"\b(tu\s+reuni[oó]n\s+con\s+unlockers|invitaci[oó]n\s+de\s+calendario|"
@@ -1409,11 +1427,46 @@ def _process_routed_turn_body(
     pending = session.get("pending") or {}
     llm_engine = ""
     llm_model = ""
+    deliver_despite_pause = False
     if pending.get("flow") == "agendar":
         reply = _continue_scheduling(company_alias, company, session, contact, client, text)
     elif pending.get("flow") == "solicitud":
         reply = _continue_request(company_alias, company, session, contact, client, text)
         reply_context = "request"
+    elif pending.get("flow") == "calificar":
+        reply, llm_engine, llm_model = _answer_query(
+            company_alias, company, session, contact, client, text,
+            meeting_state=meeting_state,
+        )
+        if str(pending.get("step") or "") == "warmup":
+            booking_url = str(company.get("appointment_booking_url") or "").strip()
+            if booking_url and booking_url not in reply and "agendar/unlockers" not in reply.lower():
+                reply = (
+                    f"{reply.rstrip()}\n\n"
+                    "¿Te sirve una llamada corta para afinarlo?\n"
+                    f"{booking_url}"
+                )
+            store.save_session(company_alias, contact, pending={})
+    elif (
+        _PRICE_Q_RE.search(text)
+        and client.get("prospect")
+        and not _history_has_assistant(session, company_alias, contact)
+    ):
+        reply = (
+            "El sitio informativo con promo 50% OFF para clientes nuevos queda desde $288.750 COP "
+            "(vigente hasta 30 ago 2026). ¿Qué tipo de página tienes en mente?"
+        )
+        _arm_prospect_warmup(company_alias, contact, topic="Lead comercial (precio)")
+    elif (
+        _QUOTE_Q_RE.search(text)
+        and client.get("prospect")
+        and not _history_has_assistant(session, company_alias, contact)
+    ):
+        reply = (
+            "Puedes pedir cotización de 3 formas: formulario en 1lockers.net, WhatsApp +57 316 624 8968 "
+            "o correo ventas@1lockers.net. Cuéntame breve tu proyecto y te orientamos."
+        )
+        _arm_prospect_warmup(company_alias, contact, topic="Lead comercial (cotización)")
     elif _is_email_landing_lead(text) and not _history_has_assistant(session, company_alias, contact):
         reply = _email_landing_first_reply(text, client)
         _arm_prospect_warmup(company_alias, contact, topic="Landing correo $200.000")
@@ -1505,6 +1558,7 @@ def _process_routed_turn_body(
                 f"Claro, le aviso a {company.get('owner_name') or 'nuestro equipo'} "
                 "para que te atienda personalmente."
             )
+            deliver_despite_pause = True
         elif _is_closing_thanks(text, str(company.get("owner_name") or "Sergio")):
             # "listo sergio gracias" — never invent a sales topic or call them Sergio.
             reply = "Con gusto. Aquí estoy si algo más."
@@ -1517,7 +1571,7 @@ def _process_routed_turn_body(
 
     session = store.get_session(company_alias, contact)
     kind = _infer_msg_kind(text)
-    if store.is_paused(session) or _recent_human_in_history(session):
+    if (store.is_paused(session) or _recent_human_in_history(session)) and not deliver_despite_pause:
         logger.info(
             "reply omitido (humano/pausa) empresa=%s contact=%s",
             company_alias, contact,
@@ -1695,6 +1749,31 @@ def _answer_query(
             system += (
                 "\nSi no sabes algo, dilo y ofrece agendar una reunión solo cuando aún "
                 "NO hay cita coordinada en el historial."
+            )
+        if _PRICE_Q_RE.search(text):
+            system += (
+                "\nPregunta directa de PRECIO: si es cliente nuevo, cita promo 50% OFF "
+                "(sitio informativo desde $288.750 COP, vigente hasta 30 ago 2026) y UNA "
+                "pregunta corta de calificación; no evadas el número."
+            )
+        if _QUOTE_Q_RE.search(text):
+            system += (
+                "\nPregunta de COTIZACIÓN: menciona formulario en 1lockers.net, WhatsApp "
+                "+57 316 624 8968 y correo ventas@1lockers.net, además de pedir breve contexto."
+            )
+        if _SECURITY_Q_RE.search(text):
+            system += (
+                "\nURGENTE seguridad/hackeo: empatía + pedir URL o mensaje de error + "
+                "invitar a escribir ya por este WhatsApp 316 624 8968 (rescate web)."
+            )
+        if _MEXICO_Q_RE.search(text) or str(getattr(resolved_country, "country", "") or "").lower() in (
+            "mx",
+            "mexico",
+            "méxico",
+        ):
+            system += (
+                "\nContacto desde MÉXICO: adapta moneda (MXN), envíos y pagos locales; "
+                "no menciones PSE/Nequi/Servientrega Colombia salvo que lo pidan."
             )
     display_name = str(client.get("name") or "Cliente").strip()
     if display_name.lower() == owner_name.lower() or owner_name.lower() in display_name.lower():

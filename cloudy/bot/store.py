@@ -373,6 +373,15 @@ def resume_session(company: str, contact: str) -> None:
     save_session(company, contact, paused_until=None, paused_reason="")
 
 
+def clear_message_log(company: str, contact: str) -> None:
+    """Remove durable turns for one contact (eval harness / GDPR-style purge)."""
+    with _lock, connect() as conn:
+        conn.execute(
+            "DELETE FROM message_log WHERE company=? AND contact=?",
+            (company, contact),
+        )
+
+
 def is_paused(session: dict[str, Any]) -> bool:
     until = session.get("paused_until")
     if not until:

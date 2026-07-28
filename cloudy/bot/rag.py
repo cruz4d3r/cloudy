@@ -32,6 +32,25 @@ INDEX_DIR = ROOT / "data" / "rag" / "index"
 _CHUNK_CHARS = 900
 _EMBED_BATCH = 16
 
+# Chunks de otros clientes/proyectos que no deben contaminar leads comerciales genéricos.
+_COMMERCIAL_BLEED_RE = re.compile(
+    r"paolapalacio|fecoljudo|decolombiajoyas|mixcoco|neogestion|lantonella|"
+    r"by-contact/|bot-kb\.md|Persona —|Tenant:.*paolapalacio",
+    re.I,
+)
+
+_COMMERCIAL_KB_PRIORITY = (
+    "faqs-servicios",
+    "02-leads-correo",
+    "20-campana-correo",
+    "01-cta-y-citas",
+    "10-diseno-web",
+    "11-hosting",
+    "12-tienda",
+    "13-marketing",
+    "16-rescate",
+)
+
 
 def _client():
     import chromadb
@@ -336,6 +355,33 @@ def load_alias_kb(company_alias: str, client_alias: str) -> str:
     return path.read_text(encoding="utf-8", errors="replace").strip()
 
 
+def _is_commercial_prospect(client: dict[str, Any]) -> bool:
+    if not client.get("prospect"):
+        return False
+    if client.get("sites"):
+        return False
+    if client_cloudy_aliases(client):
+        return False
+    return True
+
+
+def _filter_commercial_passages(passages: list[str]) -> list[str]:
+    filtered = [p for p in passages if not _COMMERCIAL_BLEED_RE.search(p[:800])]
+    return filtered if filtered else passages
+
+
+def _prioritize_commercial_kb(passages: list[str]) -> list[str]:
+    priority: list[str] = []
+    rest: list[str] = []
+    for passage in passages:
+        head = passage[:400].lower()
+        if any(token in head for token in _COMMERCIAL_KB_PRIORITY):
+            priority.append(passage)
+        else:
+            rest.append(passage)
+    return priority + rest
+
+
 def load_style_examples(company: dict[str, Any], company_alias: str = "") -> str:
     alias = company_alias or str(company.get("alias") or company.get("rag_collection") or "")
     if alias:
@@ -387,6 +433,27 @@ def retrieve_for_contact(
     query_embedding = embed([query])
     passages: list[str] = []
     digits = "".join(ch for ch in str(contact) if ch.isdigit())
+    commercial = _is_commercial_prospect(client)
+
+    if commercial:
+        passages.extend(
+            _query_collection(
+                client_ch,
+                base,
+                query_embedding,
+                company_alias=company_alias,
+                n_results=max(k + 2, 6),
+            )
+        )
+        passages = _prioritize_commercial_kb(_filter_commercial_passages(passages))
+        seen: set[str] = set()
+        unique: list[str] = []
+        for p in passages:
+            key = p[:200]
+            if key not in seen:
+                seen.add(key)
+                unique.append(p)
+        return unique[: k + 2]
 
     # Priority 1: contact persona
     if digits:
