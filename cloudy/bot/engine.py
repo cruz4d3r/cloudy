@@ -318,6 +318,20 @@ _PRICE_Q_RE = re.compile(
     re.I,
 )
 _QUOTE_Q_RE = re.compile(r"\b(cotizaci[oó]n|cotizar|propuesta)\b", re.I)
+_DESIGN_TIME_Q_RE = re.compile(
+    r"\b(cu[aá]nto demora|cu[aá]nto tiempo|cu[aá]nto tarda|plazo|tiempo de entrega|entrega)\b",
+    re.I,
+)
+_WEB_CONTEXT_RE = re.compile(r"\b(p[aá]gina|sitio|web|landing|diseñ)\b", re.I)
+_UPTIME_Q_RE = re.compile(
+    r"\b(ca[eí]se|ca[ií]da|noche|fin de semana|24\s*horas?|festivo)\b",
+    re.I,
+)
+_STORE_PAY_Q_RE = re.compile(
+    r"\b(pse|nequi)\b",
+    re.I,
+)
+_STORE_CONTEXT_RE = re.compile(r"\b(tienda|cobrar|pago|venta|woocommerce|e-?commerce)\b", re.I)
 _SECURITY_Q_RE = re.compile(
     r"\b(hackead|virus|malware|rescate|ataque|página\s+ca[ií]da)\b",
     re.I,
@@ -329,6 +343,53 @@ _FAKE_BOOKING_RE = re.compile(
     r"reenv[ií]o\s+la\s+invitaci[oó]n)\b",
     re.I,
 )
+
+
+def _is_design_time_question(text: str) -> bool:
+    t = (text or "").strip()
+    return bool(_DESIGN_TIME_Q_RE.search(t) and _WEB_CONTEXT_RE.search(t))
+
+
+def _is_store_payment_question(text: str) -> bool:
+    t = (text or "").strip()
+    return bool(_STORE_PAY_Q_RE.search(t) and _STORE_CONTEXT_RE.search(t))
+
+
+def _prospect_faq_template(text: str, client: dict[str, Any]) -> str:
+    """Deterministic FAQ replies for commercial prospects (eval-stable)."""
+    if not client.get("prospect"):
+        return ""
+    if _SECURITY_Q_RE.search(text):
+        return (
+            "Lo siento por eso. Envíame la URL de la página y escríbenos ya por este WhatsApp "
+            "+57 316 624 8968 para el rescate. ¿Desde cuándo ves el mensaje?"
+        )
+    if _UPTIME_Q_RE.search(text) and _WEB_CONTEXT_RE.search(text):
+        return (
+            "No importa la hora: vigilamos el hosting 24/7, incluyendo noches, fines de semana y festivos. "
+            "Si se cae, escríbenos por WhatsApp +57 316 624 8968 y lo revisamos al instante."
+        )
+    if _is_design_time_question(text):
+        return (
+            "Depende del alcance: un sitio informativo suele estar entre 3 y 5 semanas; "
+            "proyectos más completos pueden ir de 5 a 8 semanas. ¿Qué tipo de página tienes en mente?"
+        )
+    if _is_store_payment_question(text):
+        return (
+            "Sí: en tiendas WooCommerce integramos pagos con tarjeta, PSE y Nequi según la pasarela. "
+            "¿Ya vendes en físico o arrancas desde cero en línea?"
+        )
+    if _QUOTE_Q_RE.search(text):
+        return (
+            "Puedes pedir cotización de 3 formas: formulario en 1lockers.net, WhatsApp +57 316 624 8968 "
+            "o correo ventas@1lockers.net. Cuéntame breve tu proyecto y te orientamos."
+        )
+    if _PRICE_Q_RE.search(text):
+        return (
+            "El sitio informativo con promo 50% OFF para clientes nuevos queda desde $288.750 COP "
+            "(vigente hasta 30 ago 2026). ¿Qué tipo de página tienes en mente?"
+        )
+    return ""
 
 
 def _is_commercial_lead(text: str, client: dict[str, Any]) -> bool:
@@ -1447,6 +1508,10 @@ def _process_routed_turn_body(
                     f"{booking_url}"
                 )
             store.save_session(company_alias, contact, pending={})
+    elif faq_tpl := _prospect_faq_template(text, client):
+        reply = faq_tpl
+        if not _history_has_assistant(session, company_alias, contact):
+            _arm_prospect_warmup(company_alias, contact, topic="Lead comercial (FAQ)")
     elif (
         _PRICE_Q_RE.search(text)
         and client.get("prospect")

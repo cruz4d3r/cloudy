@@ -83,6 +83,43 @@ def _collect_paths(paths: list[Path]) -> list[Path]:
     return [f for f in files if not f.name.startswith(".")]
 
 
+def _kb_scope_for_path(rel: str) -> str:
+    """Classify ingest scope from relative path under ROOT."""
+    low = rel.replace("\\", "/").lower()
+    if "/by-contact/" in low or "/by-alias/" in low or "/bot_kb/" in low:
+        return "client"
+    if "/companies/" in low and "/kb/" in low:
+        return "commercial"
+    if "/data/rag/unlockers" in low or low.endswith("unlockers-cloud-empresa.md"):
+        return "commercial"
+    return "commercial"
+
+
+def _meta(
+    company_alias: str,
+    *,
+    kind: str,
+    scope: str,
+    source: str = "",
+    contact: str = "",
+    client_alias: str = "",
+    pair_id: str = "",
+) -> dict[str, str]:
+    meta: dict[str, str] = {
+        "company": company_alias,
+        "kind": kind,
+        "scope": scope,
+        "source": source,
+    }
+    if contact:
+        meta["contact"] = contact
+    if client_alias:
+        meta["client_alias"] = client_alias
+    if pair_id:
+        meta["pair_id"] = pair_id
+    return meta
+
+
 def _chunk_id(document: str, metadata: dict[str, str]) -> str:
     """
     Stable Chroma id from document body + metadata.
@@ -147,6 +184,8 @@ def _query_collection(
             where=where,
         )
     except Exception:
+        if extra_where:
+            return []
         # Fallback without where if legacy chunks lack company metadata.
         result = collection.query(query_embeddings=query_embedding, n_results=n_results)
     passages: list[str] = []
@@ -159,9 +198,13 @@ def _query_collection(
 def ingest_knowledge(company_alias: str, company: dict[str, Any]) -> dict[str, int]:
     """(Re)index every markdown source for the tenant."""
     require_company_alias(company_alias, company)
-    collection = _client().get_or_create_collection(
-        str(company.get("rag_collection") or company_alias)
-    )
+    chroma_client = _client()
+    coll_name = str(company.get("rag_collection") or company_alias)
+    try:
+        chroma_client.delete_collection(coll_name)
+    except Exception:
+        pass
+    collection = chroma_client.get_or_create_collection(coll_name)
     documents: list[str] = []
     metadatas: list[dict[str, str]] = []
     paths = _collect_paths(knowledge_source_paths(company_alias, company))
@@ -171,9 +214,12 @@ def ingest_knowledge(company_alias: str, company: dict[str, Any]) -> dict[str, i
         if "/by-contact/" in rel and path.name in ("persona.md", "corpus.txt"):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        scope = _kb_scope_for_path(rel)
         for chunk in _chunk_markdown(text):
             documents.append(chunk)
-            metadatas.append({"source": path.name, "company": company_alias, "kind": "kb"})
+            metadatas.append(
+                _meta(company_alias, kind="kb", scope=scope, source=path.name)
+            )
     count = _upsert(collection, documents, metadatas) if documents else 0
     return {"files": len(paths), "chunks": count}
 
@@ -196,11 +242,12 @@ def ingest_conversations(company_alias: str, company: dict[str, Any]) -> dict[st
             for q, a in pairs
         ]
         metadatas = [
-            {
-                "company": company_alias,
-                "kind": "conversation",
-                "pair_id": hashlib.sha256(f"{q}\x1f{a}".encode("utf-8")).hexdigest()[:16],
-            }
+            _meta(
+                company_alias,
+                kind="conversation",
+                scope="conversation",
+                pair_id=hashlib.sha256(f"{q}\x1f{a}".encode("utf-8")).hexdigest()[:16],
+            )
             for q, a in pairs
         ]
         _upsert(collection, documents, metadatas)
@@ -237,13 +284,13 @@ def ingest_client_rag(company_alias: str, company: dict[str, Any]) -> dict[str, 
         for chunk in _chunk_markdown(text):
             documents.append(chunk)
             metadatas.append(
-                {
-                    "company": company_alias,
-                    "contact": contact,
-                    "client_alias": "",
-                    "kind": "persona",
-                    "source": f"by-contact/{contact}/persona.md",
-                }
+                _meta(
+                    company_alias,
+                    kind="persona",
+                    scope="client",
+                    contact=contact,
+                    source=f"by-contact/{contact}/persona.md",
+                )
             )
 
     for kb in sorted((root / "by-alias").glob("*/bot-kb.md")):
@@ -252,13 +299,13 @@ def ingest_client_rag(company_alias: str, company: dict[str, Any]) -> dict[str, 
         for chunk in _chunk_markdown(text):
             documents.append(chunk)
             metadatas.append(
-                {
-                    "company": company_alias,
-                    "contact": "",
-                    "client_alias": alias,
-                    "kind": "kb",
-                    "source": f"by-alias/{alias}/bot-kb.md",
-                }
+                _meta(
+                    company_alias,
+                    kind="kb",
+                    scope="client",
+                    client_alias=alias,
+                    source=f"by-alias/{alias}/bot-kb.md",
+                )
             )
 
     count = _upsert(collection, documents, metadatas) if documents else 0
@@ -291,25 +338,25 @@ def ingest_learning_turn(
         qa_doc = f"Pregunta del cliente:\n{user_text}\n\nRespuesta:\n{staff_text}"
         documents.append(qa_doc)
         metadatas.append(
-            {
-                "company": company_alias,
-                "contact": digits,
-                "client_alias": "",
-                "kind": "qa",
-                "source": f"live/{digits}",
-            }
+            _meta(
+                company_alias,
+                kind="qa",
+                scope="conversation",
+                contact=digits,
+                source=f"live/{digits}",
+            )
         )
 
     if staff_text and not user_text:
         documents.append(f"Respuesta de referencia:\n{staff_text}")
         metadatas.append(
-            {
-                "company": company_alias,
-                "contact": digits,
-                "client_alias": "",
-                "kind": "staff_line",
-                "source": f"live/{digits}",
-            }
+            _meta(
+                company_alias,
+                kind="staff_line",
+                scope="conversation",
+                contact=digits,
+                source=f"live/{digits}",
+            )
         )
 
     conv_chunks = _upsert(conv, documents, metadatas) if documents else 0
@@ -324,13 +371,13 @@ def ingest_learning_turn(
         for chunk in _chunk_markdown(text):
             documents_p = [chunk]
             metas_p = [
-                {
-                    "company": company_alias,
-                    "contact": digits,
-                    "client_alias": "",
-                    "kind": "persona",
-                    "source": f"by-contact/{digits}/persona.md",
-                }
+                _meta(
+                    company_alias,
+                    kind="persona",
+                    scope="client",
+                    contact=digits,
+                    source=f"by-contact/{digits}/persona.md",
+                )
             ]
             persona_chunks += _upsert(pcol, documents_p, metas_p)
 
@@ -443,6 +490,7 @@ def retrieve_for_contact(
                 query_embedding,
                 company_alias=company_alias,
                 n_results=max(k + 2, 6),
+                extra_where={"scope": "commercial"},
             )
         )
         passages = _prioritize_commercial_kb(_filter_commercial_passages(passages))
