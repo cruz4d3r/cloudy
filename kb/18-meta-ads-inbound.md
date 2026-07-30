@@ -1,29 +1,32 @@
-# Tráfico Meta Ads (carrusel Unlockers Cloud)
+# Tráfico Meta Ads (Unlockers Cloud — Presencia Digital)
 
-Palabras clave: anuncio, meta, facebook, instagram, vi el anuncio, publicidad, carrusel, pauta, ads.
+Palabras clave: anuncio, meta, facebook, instagram, vi el anuncio, publicidad, pauta, ads, presencia digital, cloudy, pagina web whatsapp.
 
-## Cómo atender a quien llega del anuncio
+## Prioridad: Presencia Digital por WhatsApp
 
-1. Reconocer: "Perfecto, viste el anuncio. ¿Qué es lo que más te está frenando hoy: la web, un software lento, o el contenido en video?"
-2. Calificar el dolor **antes** de hablar de planes o precios. Una sola pregunta a la vez.
-3. No soltar catálogo ni cifras en el primer mensaje. Primero entender qué te frena.
-4. Pedir nombre (si no lo tiene), WhatsApp y franja para llamada (9:00–18:00 America/Bogota).
+Si el lead viene de anuncio (video o carrusel) y escribe al **316 624 8968**:
+
+1. Reconocer el anuncio: "Perfecto, viste el anuncio. Te ayudo a crear tu página web desde aquí mismo."
+2. **Entrar al flujo Presencia Digital** si es lead nuevo: preguntar nombre del negocio → descripción → publicar landing.
+3. No hablar de planes pagos ni precios en el primer mensaje.
+4. Tono: negocio local o PYME pequeña (1–10 empleados): carnicería, panadería, restaurante, joyería, distribuidora, comercio.
 5. WhatsApp comercial: +57 316 624 8968. Sitio: https://1lockers.net
 
-## Tres dolores del carrusel
+## Si no califica para Presencia Digital (cliente existente)
 
-- **Web fea / vieja:** orientar a rediseño a medida (página planes-diseno-web). Sin precios en el chat hasta que pida o agende.
-- **Software lento / sistemas que frenan:** orientar a software a medida / Katana (planes-katana-erp).
-- **Videos / marketing con IA:** orientar a marketing (planes-marketing): contenido y videos con IA.
+1. Calificar el dolor en una pregunta: web, software lento, o contenido en video.
+2. Orientar sin catálogo ni cifras hasta que pida o agende.
+3. Ofrecer franja para llamada (9:00–18:00 America/Bogota) si hace falta.
 
 ## Frases útiles
 
-- "Sin rodeos: cuéntame qué está fallando y te digo el siguiente paso."
-- "No te voy a tirar un menú de planes. Primero el problema, después la solución."
-- "Si prefieres, escríbenos al WhatsApp 316 624 8968 y seguimos ahí."
+- "Por tiempo limitado puedes probar cómo queda tu página: dime cómo se llama tu negocio."
+- "Sin rodeos: en dos preguntas armamos tu presencia digital."
+- "No te voy a tirar un menú de planes. Primero tu página, después vemos si quieres algo más."
 
 ## Qué no hacer
 
+- No decir "gratis" ni inventar descuentos de campaña.
 - No abrir con precios ni "planes Básico/Pyme".
 - No ignorar que llegó de Meta/Facebook/Instagram.
-- No inventar descuentos de campaña.
+- No empujar gran empresa / corporativo; el anuncio apunta a micro y PYME local.

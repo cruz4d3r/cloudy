@@ -140,6 +140,19 @@ def client_meta_dir(alias: str) -> Path:
     return CLIENTS_DIR / alias / "meta"
 
 
+def client_deliveries_dir(alias: str) -> Path:
+    if alias == "impark":
+        return (
+            CLIENTS_DIR
+            / "1lockers"
+            / "subprojects"
+            / "impark"
+            / "meta"
+            / "deliveries"
+        )
+    return client_meta_dir(alias) / "deliveries"
+
+
 def client_sites_dir(alias: str) -> Path:
     return CLIENTS_DIR / alias / "sites"
 

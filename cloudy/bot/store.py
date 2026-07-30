@@ -25,7 +25,17 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "data" / "rag" / "bot.sqlite"
+_RUNTIME_DB = Path.home() / "Library/Application Support/CloudyBot/runtime/data/rag/bot.sqlite"
+
+
+def _resolve_db_path() -> Path:
+    """Live CloudyBot on Mac writes to Application Support; CLI must use the same file."""
+    if _RUNTIME_DB.is_file():
+        return _RUNTIME_DB
+    return ROOT / "data" / "rag" / "bot.sqlite"
+
+
+DB_PATH = _resolve_db_path()
 
 _lock = threading.Lock()
 

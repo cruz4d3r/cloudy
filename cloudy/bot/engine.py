@@ -147,6 +147,18 @@ def _strip_accents(text: str) -> str:
 _ECHO_GRACE_SECONDS = 30.0
 
 
+_META_ADS_ICEBREAKER_RE = re.compile(
+    r"(vengo del video|quiero crecer con tecnolog|cotizar web|cotizar una pagina|"
+    r"necesito un software|agendar una llamada corta|quiero info de marketing)",
+    re.I,
+)
+
+
+def _is_meta_ads_icebreaker(text: str) -> bool:
+    """True when the user tapped a Meta Click-to-WA icebreaker (not a new greeting)."""
+    return bool(_META_ADS_ICEBREAKER_RE.search(_strip_accents(text or "")))
+
+
 def _detect_inbound_attribution(text: str) -> dict[str, Any]:
     """Infer UTM-ish source from first WA message (ads, email, Meta)."""
     t = (text or "").lower()
@@ -162,6 +174,11 @@ def _detect_inbound_attribution(text: str) -> dict[str, Any]:
         out["utm_medium"] = "paid_social"
         out["utm_campaign"] = "meta_ads_inbound"
         out["interested_services"] = ["Proyecto desde Meta Ads"]
+    elif _is_meta_ads_icebreaker(text):
+        out["utm_source"] = "facebook"
+        out["utm_medium"] = "paid_social"
+        out["utm_campaign"] = "unlockers_video_wa_bga_2026"
+        out["interested_services"] = ["Lead Meta Ads — video WhatsApp"]
     elif any(w in t for w in ("correo", "email", "mail", "vi el correo")):
         out["utm_source"] = "cold_email"
         out["utm_medium"] = "email"
@@ -1551,6 +1568,7 @@ def _process_routed_turn_body(
             if intent == "saludo" and (
                 _history_has_assistant(session, company_alias, contact)
                 or not _is_bare_greeting(text)
+                or _is_meta_ads_icebreaker(text)
             ):
                 intent = "consulta"
         except LLMError:

@@ -39,8 +39,8 @@ def request_json(
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
         status = exc.code
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"No se pudo contactar a Katana ({url}): {exc.reason}") from exc
+    except (urllib.error.URLError, TimeoutError):
+        raise
 
     try:
         parsed = json.loads(raw) if raw else {}
