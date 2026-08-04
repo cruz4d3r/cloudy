@@ -86,6 +86,63 @@ def _extract_phone_from_profile(profile_context: str) -> str:
     return ""
 
 
+def _is_katana_analytics_channel(channel: str) -> bool:
+    """Katana cockpit briefings — preserve caller system prompt; no WA sales/country."""
+    ch = (channel or "").strip().lower()
+    return ch.startswith("katana_")
+
+
+def _build_katana_analytics_messages(
+    raw_messages: list[dict[str, str]],
+    *,
+    user_message: str,
+) -> list[dict[str, str]]:
+    """Passthrough for Katana panel chat: keep analytics system + dialogue."""
+    last_user = _last_user_message(raw_messages, user_message)
+    history: list[dict[str, str]] = []
+
+    for turn in raw_messages[-30:]:
+        role = str(turn.get("role") or "").strip()
+        content = str(turn.get("content") or "").strip()
+        if role not in ("system", "user", "assistant") or not content:
+            continue
+        history.append({"role": role, "content": content[:12000]})
+
+    if not history or history[0].get("role") != "system":
+        history.insert(
+            0,
+            {
+                "role": "system",
+                "content": (
+                    "Eres Cloudy, analista del panel Katana. "
+                    "Responde solo con los datos del contexto JSON del usuario. "
+                    "No vendas servicios, no preguntes el país del usuario ni uses KB comercial."
+                ),
+            },
+        )
+    else:
+        suffix = (
+            "\n\nModo panel Katana: responde solo con el JSON de contexto; "
+            "no vendas ni preguntes país. "
+            "NUNCA muestres ni repitas el JSON al usuario; responde en español natural."
+        )
+        if suffix.strip() not in history[0]["content"]:
+            history[0] = {
+                "role": "system",
+                "content": (history[0]["content"] + suffix)[:12000],
+            }
+
+    if last_user:
+        if history and history[-1].get("role") == "user" and history[-1].get("content") == last_user:
+            pass
+        elif history and history[-1].get("role") == "user":
+            history[-1] = {"role": "user", "content": last_user[:12000]}
+        else:
+            history.append({"role": "user", "content": last_user[:12000]})
+
+    return history
+
+
 def _country_prompt_from_profile(profile_context: str, user_message: str) -> str:
     from cloudy.bot.contact_country import detect_from_text, infer_from_phone, prompt_block, resolve_country
 
@@ -115,7 +172,16 @@ def _build_messages(
 
     Caller ``messages`` may include system turns; we rebuild system from Edge
     rules so KB retrieval stays consistent with Katana contingency.
+
+  ``katana_*`` channels (cockpit briefings) use passthrough — caller system
+    prompt + history without WA KB or country detection.
     """
+    if _is_katana_analytics_channel(channel):
+        return _build_katana_analytics_messages(
+            raw_messages,
+            user_message=user_message,
+        )
+
     last_user = _last_user_message(raw_messages, user_message)
     is_project = (channel or "").strip() == "project_whatsapp"
     is_client = is_project or _is_recognized_client(profile_context)

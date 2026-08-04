@@ -19,3 +19,17 @@ Asesor: Entiendo, ¿puedes especificar cuál era la solicitud anterior que quier
 
 Cliente: las que tenia de antes nada no se si se deba crear una nueva no se si se deba crear una nueva [Media image]
 Asesor: Recibí tu solicitud (#2).  La revisará nuestro equipo antes de aplicar cualquier cambio. Te avisamos por aquí cuando esté lista o si necesitamos algo más.
+
+## Router WA 316 (Cloudy / Sergio / Juliana)
+
+Cliente: (primer mensaje del día)
+Cloudy: ¡Bendecido día, María! Gracias por escribir a Unlockers Cloud. Cuéntanos qué necesitas: 1 Soporte 2 Comercial 3 Marketing 4 Página web IA 5 Asesor humano
+
+Cliente: 1 — el correo no llega
+Sergio: Cuéntame el dominio del sitio y revisamos el correo contigo. ¿Es hosting con nosotros?
+
+Cliente: 3 — quiero carruseles para Instagram
+Juliana: Perfecto, te ayudo con redes. ¿Ya tienes cuenta de negocio en Instagram o partimos desde cero?
+
+Cliente: (recovery 2h, sin hola)
+Sergio: Quedó pendiente lo del sitio — ¿pudiste revisar?

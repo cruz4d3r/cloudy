@@ -23,6 +23,15 @@
         "groq-gpt-oss",
         "openai-katana"
       ]
+    },
+    "chatwoot": {
+      "chain_labels": [
+        "groq-llama",
+        "gemini-flash",
+        "openrouter",
+        "ollama-cloud",
+        "groq-gpt-oss"
+      ]
     }
   },
   "chain": [

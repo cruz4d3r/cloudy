@@ -170,6 +170,8 @@ def resolve_llm_profile(channel: str) -> str | None:
         return "whatsapp"
     if ch == "batch":
         return "batch"
+    if ch == "chatwoot":
+        return "chatwoot"
     return None
 
 
